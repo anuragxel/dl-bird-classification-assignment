@@ -1,8 +1,9 @@
 import numpy as np
-#import cv2
+import cv2
 import os
 import csv
 import random
+
 
 
 def to_categorical(y,num_classes):
@@ -11,6 +12,15 @@ def to_categorical(y,num_classes):
     categorical = np.zeros((n, num_classes))
     categorical[np.arange(n), y] = 1
     return categorical
+
+def get_image_region(im_path, bb):
+    im = cv2.imread(im_path)
+    bb = [ int(x) for x in bb ]
+    x, y, w, h = bb
+    im = im[y:y+h,x:x+w]
+    im = cv2.resize(im, (224,224))
+    return im
+
 
 class BirdClassificationGenerator(object):
     def __init__(self, dataset_path, validation_ratio=0.3, batch_size=16):
@@ -36,7 +46,7 @@ class BirdClassificationGenerator(object):
         with open(os.path.join(dataset_path, 'bounding_boxes_train.txt')) as f:
             spamreader = csv.reader(f, delimiter=' ')
             for row in spamreader:
-                self.bb_bird_dict[int(row[0])] = [ float(x) for x in row[1:4] ]
+                self.bb_bird_dict[int(row[0])] = [ float(x) for x in row[1:5] ]
          
         with open(os.path.join(dataset_path, 'image_class_labels_train.txt')) as f:
             spamreader = csv.reader(f, delimiter=' ')
@@ -54,39 +64,38 @@ class BirdClassificationGenerator(object):
             for row in spamreader:
                 self.bb_bird_dict[int(row[0])] = [ float(x) for x in row[1:5] ]
         
-        
         size_val_list = int(validation_ratio*len(self.train_list))
         self.val_list = random.sample(self.train_list, size_val_list)
         self.train_list = filter(lambda x: x not in self.val_list, self.train_list)
-       
+        self._shuffle()
+
+    def _shuffle(self): 
         # Coz Gradient Descent
         random.shuffle(self.val_list)
         random.shuffle(self.train_list)
-        random.shuffle(self.test_list)
-
+    
     def _generate(self,idx_list,set_type,batch_size):
         loop = 0
         epoch_iter = 0
         max_size = len(idx_list)
         while True:
-            if set_type == "test" and epoch_iter == 1: 
+            if epoch_iter == 1: 
                 break
             if loop + batch_size < max_size:
                 gen_list = idx_list[loop:loop+batch_size]
+                loop += batch_size
             else:
                 last_iter = loop + batch_size - max_size
                 gen_list = idx_list[loop:max_size] + gen_list[0:last_iter]
                 loop = 0
+                self._shuffle()
                 epoch_iter += 1
-            loop += batch_size
             assert(len(gen_list) == batch_size)
             if set_type == 'train':
-                yield ([ os.path.join(self.dataset_path, self.images_dict[x]) for x in gen_list ], 
-                          np.array([ self.bb_bird_dict[x] for x in gen_list ]), 
-                          to_categorical([ self.train_labels_dict[x] - 1 for x in gen_list ], self.num_classes)) 
+                yield ( gen_list, np.array([ get_image_region(os.path.join(self.dataset_path, 'images', self.images_dict[x]), self.bb_bird_dict[x]) for x in gen_list ]), 
+                          to_categorical([ self.train_labels_dict[x] - 1 for x in gen_list ], self.num_classes))
             else:
-                yield ([ os.path.join(self.dataset_path, self.images_dict[x]) for x in gen_list ], 
-                           np.array([ self.bb_bird_dict[x] for x in gen_list ]))
+                yield ( gen_list, np.array([ get_image_region(os.path.join(self.dataset_path, 'images', self.images_dict[x]), self.bb_bird_dict[x]) for x in gen_list ]))
 
     def train_generator(self):
         return self._generate(self.train_list, 'train', self.batch_size)
@@ -99,9 +108,13 @@ class BirdClassificationGenerator(object):
 
 if __name__ == "__main__":
     obj = BirdClassificationGenerator('/Neutron9/anurag/CUB_200_2011/',0.2,8)
-    i = 1
-    for paths, bbs, labels in obj.train_generator(): 
-        print(paths,labels, bbs)
+    for idxes, images, labels in obj.train_generator(): 
+        print(idxes, images.shape,labels.shape)
         break
-    for values, bbs in obj.test_generator():
-        print(paths,bbs)
+    for idxes, images, labels in obj.val_generator():
+        print(idxes, images.shape, labels.shape)
+        break
+    for idxes, images in obj.test_generator():
+        print(idxes,images.shape)
+        break
+        
