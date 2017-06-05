@@ -3,6 +3,68 @@ import warnings
 from torch.optim.optimizer import Optimizer
 
 
+class EarlyStopping(object):
+    """Instead of stopping at the end of max number of epochs,
+       Stop when the model stops learning, by monitering a certain
+       value, can be either 'val_loss' or 'val_acc' or something else.
+       This scheduler checks the metric and if for 'patience' number
+       of epochs, there's no improvement, the training loop is 
+       signalled to stop.
+       
+       Args:
+           patience: number of epochs with no improvement 
+                     after which training is stopped
+           metric: string. 'val_loss': validation loss 
+                           'val_acc' : validation accuracy
+           verbose: int. 0: quiet 1: update messages
+           epsilon: threshold for measuring the new optimum,
+                    to only focus on significant changes
+    """
+    def __init__(self, optimizer, patience=10, mode='min', 
+                       verbose=0, epsilon=1e-4):
+        super(EarlyStopping, self).__init__()
+    
+        self.patience = patience
+        self.verbose = verbose
+        self.epsilon = epsilon
+        assert isinstance(optimizer, Optimizer)
+        self.optimizer = optimizer
+        self.stopped = False
+        self.mode = mode
+        self.best = 0
+        self.wait = 0
+        self._reset()
+
+    def _reset(self):
+        if self.mode not in ['min', 'max']:
+            raise RuntimeError('Early Stopping mode %s is unknown')
+        if self.mode == 'min':
+            self.monitor_op = lambda a,b: np.less(a,b-self.epsilon)
+            self.best = np.Inf
+        if self.mode == 'max':
+            self.monitor_op = lambda a,b: np.greater(a,b+self.epsilon)
+            self.best = -np.Inf
+        self.wait = 0
+
+    def reset(self):
+        self._reset()
+
+    def step(self, metrics, epoch):
+        current = metrics
+        if current == None:
+            warnings.warn("Early Stopping requires metrics to be available!",RuntimeWarning)
+        else:
+            if self.monitor_op(current, self.best):
+                self.best = current
+                self.wait = 0
+            else:
+                if self.wait >= self.patience:
+                    self.stopped = True
+                    if self.verbose:
+                        print('Early Stopping criteria reached at %s '% (epoch, metrics))
+                self.wait += 1
+        return self.stopped
+                  
 class ReduceLROnPlateau(object):
     """Reduce learning rate when a metric has stopped improving.
     Models often benefit from reducing the learning rate by a factor
