@@ -17,7 +17,6 @@ class BirdClassificationGenerator(object):
         self.dataset_path = dataset_path
         self.batch_size = batch_size
         self.num_classes = 200
-        self.epoch_iter = 0
 
         self.train_list = []
         self.test_list = []
@@ -65,19 +64,22 @@ class BirdClassificationGenerator(object):
         random.shuffle(self.train_list)
         random.shuffle(self.test_list)
 
-    def _generate(self,idx_list,set_type):
+    def _generate(self,idx_list,set_type,batch_size):
         loop = 0
+        epoch_iter = 0
         max_size = len(idx_list)
         while True:
-            if loop + self.batch_size < max_size:
-                gen_list = idx_list[loop:loop+self.batch_size]
+            if set_type == "test" and epoch_iter == 1: 
+                break
+            if loop + batch_size < max_size:
+                gen_list = idx_list[loop:loop+batch_size]
             else:
-                last_iter = loop + self.batch_size - max_size
+                last_iter = loop + batch_size - max_size
                 gen_list = idx_list[loop:max_size] + gen_list[0:last_iter]
                 loop = 0
-                self.epoch_iter += 1
-            loop += self.batch_size
-            assert(len(gen_list) == self.batch_size)
+                epoch_iter += 1
+            loop += batch_size
+            assert(len(gen_list) == batch_size)
             if set_type == 'train':
                 yield ([ os.path.join(self.dataset_path, self.images_dict[x]) for x in gen_list ], 
                           np.array([ self.bb_bird_dict[x] for x in gen_list ]), 
@@ -85,22 +87,21 @@ class BirdClassificationGenerator(object):
             else:
                 yield ([ os.path.join(self.dataset_path, self.images_dict[x]) for x in gen_list ], 
                            np.array([ self.bb_bird_dict[x] for x in gen_list ]))
- 
+
     def train_generator(self):
-        return self._generate(self.train_list,'train')
+        return self._generate(self.train_list, 'train', self.batch_size)
  
     def val_generator(self): 
-        return self._generate(self.val_list,'train')
+        return self._generate(self.val_list, 'train', self.batch_size)
 
     def test_generator(self):
-        return self._generate(self.test_list,'test')
+        return self._generate(self.test_list, 'test', self.batch_size)
 
 if __name__ == "__main__":
     obj = BirdClassificationGenerator('/Neutron9/anurag/CUB_200_2011/',0.2,8)
     i = 1
-    for values, bbs, labels in obj.train_generator(): 
-        print(values,labels, bbs)
+    for paths, bbs, labels in obj.train_generator(): 
+        print(paths,labels, bbs)
         break
     for values, bbs in obj.test_generator():
-        print(values,bbs)
-        break
+        print(paths,bbs)
