@@ -4,21 +4,18 @@ import os
 import csv
 import random
 
-
-
-def to_categorical(y,num_classes):
-    y = np.array(y, dtype='int').ravel()
-    n = y.shape[0]
-    categorical = np.zeros((n, num_classes))
-    categorical[np.arange(n), y] = 1
-    return categorical
-
 def get_image_region(im_path, bb):
     im = cv2.imread(im_path)
     bb = [ int(x) for x in bb ]
     x, y, w, h = bb
     im = im[y:y+h,x:x+w]
     im = cv2.resize(im, (224,224))
+    im = im.astype(np.float32)
+    im[:,:,0] -= 103.939
+    im[:,:,1] -= 116.779
+    im[:,:,2] -= 123.68 
+    im = np.divide(im, 255.0)
+    im = np.transpose(im, (2,0,1))
     return im
 
 
@@ -93,7 +90,8 @@ class BirdClassificationGenerator(object):
             assert(len(gen_list) == batch_size)
             if set_type == 'train':
                 yield ( gen_list, np.array([ get_image_region(os.path.join(self.dataset_path, 'images', self.images_dict[x]), self.bb_bird_dict[x]) for x in gen_list ]), 
-                          to_categorical([ self.train_labels_dict[x] - 1 for x in gen_list ], self.num_classes))
+                          np.array([ self.train_labels_dict[x] - 1 for x in gen_list ], dtype=np.int64).ravel())
+                          #to_categorical([ self.train_labels_dict[x] - 1 for x in gen_list ], self.num_classes))
             else:
                 yield ( gen_list, np.array([ get_image_region(os.path.join(self.dataset_path, 'images', self.images_dict[x]), self.bb_bird_dict[x]) for x in gen_list ]))
 
