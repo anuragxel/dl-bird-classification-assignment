@@ -9,7 +9,7 @@ def get_image_region(im_path, bb):
     bb = [ int(x) for x in bb ]
     x, y, w, h = bb
     im = im[y:y+h,x:x+w]
-    im = cv2.resize(im, (224,224))
+    im = cv2.resize(im, (448,448))
     im = im.astype(np.float32)
     im[:,:,0] -= 103.939
     im[:,:,1] -= 116.779
